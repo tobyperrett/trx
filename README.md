@@ -12,7 +12,7 @@ We provide two ways to use this method. The first is to incorporate it into your
 
 TRX_CNN in model.py contains a TRX with multiple cardinalities (i.e. pairs, triples etc.) and a ResNet backbone. It takes in support set videos, support set labels and query videos. It outputs the distances from each query video to each of the query-specific support set prototypes which are used as logits. Feed this into the loss from utils.py. An example of how it is constructed with the required arguments, and how it is called (with input dimensions etc.) is in main in model.py
 
-It is setup by default to use ResNet18 on one GPU for portability with 84x84 resaolution, but we recommend distributing the CNN over multiple GPUs so you can use ResNet50, 224x224 and 5 query videos per class. How you do this will depend on your system, but the function distribute shows how we do it.
+You can use it with ResNet18 with 84x84 resolution on one GPU, but we recommend distributing the CNN over multiple GPUs so you can use ResNet50, 224x224 and 5 query videos per class. How you do this will depend on your system, but the function distribute shows how we do it.
 
 Use episodic training. That is, construct a random task from the training dataset like e.g. MAML, prototypical nets etc.. Average gradients and backpropogate once every 16 training tasks. You can look at the rest of the code for an example of how this is done.
 
