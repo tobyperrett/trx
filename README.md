@@ -28,7 +28,8 @@ To prepare your data, zip the dataset folder with no compression. We did this as
 Put your desired splits (we used https://github.com/ffmpbgrnn/CMN for Kinetics and SSv2) in text files. These should be called trainlistXX.txt and testlistXX.txt. XX is a 0-padded number, e.g. 01. You can have separate text files for testing on the validation set, e.g. train/testlist01.txt for the test set, and train/testlist02.txt for the validation set. The number is passed as a command line argument.
 
 Modify the distribute function in model.py. We have 4 x 11GB GPUs, so we split the ResNets over the 4 GPUs and leave the cross-transformer part on GPU 0. The ResNets are always split evenly across all GPUs specified, so you might have to split the cross-transformer part, or have the cross-transformer part on its own GPU.
-Modify the command line parser in run.py so it has the correct paths for the dataset zip and split text files.
+
+Modify the command line parser in run.py so it has the correct paths and filenames for the dataset zip and split text files.
 
 
 ## Acknowledgements
