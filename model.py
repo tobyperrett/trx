@@ -174,7 +174,7 @@ class CNN_TRX(nn.Module):
         all_logits = [t(context_features, context_labels, target_features)['logits'] for t in self.transformers]
         all_logits = torch.stack(all_logits, dim=-1)
         sample_logits = all_logits 
-        sample_logits = torch.norm(sample_logits, dim=[-1]) * -1
+        sample_logits = torch.mean(sample_logits, dim=[-1])
 
         return_dict = {'logits': split_first_dim_linear(sample_logits, [NUM_SAMPLES, target_features.shape[0]])}
         return return_dict
