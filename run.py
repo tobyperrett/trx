@@ -17,7 +17,7 @@ import random
 NUM_TEST_TASKS = 10000
 PRINT_FREQUENCY = 1000
 
-TEST_ITERS = [7000]
+TEST_ITERS = [10000]
 
 def main():
     learner = Learner()
@@ -81,7 +81,7 @@ class Learner:
     def parse_command_line(self):
         parser = argparse.ArgumentParser()
 
-        parser.add_argument("--dataset", choices=["ssv2", "kinetics"], default="ssv2",
+        parser.add_argument("--dataset", choices=["ssv2", "kinetics", "hmdb", "ucf"], default="ssv2",
                             help="Dataset to use.")
         parser.add_argument("--learning_rate", "-lr", type=float, default=0.001, help="Learning rate.")
         parser.add_argument("--tasks_per_batch", type=int, default=16,
@@ -93,9 +93,11 @@ class Learner:
         parser.add_argument("--resume_from_checkpoint", "-r", dest="resume_from_checkpoint", default=False,
                             action="store_true", help="Restart from latest checkpoint.")
         parser.add_argument("--way", type=int, default=5, help="Way of single dataset task.")
-        parser.add_argument("--shot", type=int, default=1, help="Shots per class for context of single dataset task.")
+        parser.add_argument("--shot", type=int, default=5, help="Shots per class for context of single dataset task.")
         parser.add_argument("--query_per_class", type=int, default=5,
-                            help="Target samples (i.e. queries) per class.")
+                            help="Target samples (i.e. queries) per class used for training.")
+        parser.add_argument("--query_per_class_test", type=int, default=1,
+                            help="Target samples (i.e. queries) per class used for testing.")
 
         parser.add_argument("--seq_len", type=int, default=8, help="Frames per video.")
         parser.add_argument("--num_workers", type=int, default=10, help="Num dataloader workers.")
@@ -141,6 +143,12 @@ class Learner:
         elif args.dataset == "kinetics":
             args.traintestlist = os.path.join(args.scratch, "video_datasets/splits/kineticsTrainTestlist")
             args.path = os.path.join(args.scratch, "video_datasets/data/kinetics_256q5_1.zip")
+        elif args.dataset == "ucf":
+            args.traintestlist = os.path.join(args.scratch, "video_datasets/splits/ucfTrainTestlist")
+            args.path = os.path.join(args.scratch, "video_datasets/data/UCF-101_320.zip")
+        elif args.dataset == "hmdb":
+            args.traintestlist = os.path.join(args.scratch, "video_datasets/splits/hmdb51TrainTestlist")
+            args.path = os.path.join(args.scratch, "video_datasets/data/hmdb51_256q5.zip")
         return args
 
     def run(self):

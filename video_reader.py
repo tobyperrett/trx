@@ -23,12 +23,19 @@ class Split():
         self.videos.append(paths)
         self.gt_a_list.append(gt_a)
 
-    def get_rand_vid(self, label):
+    def get_rand_vid(self, label, idx=-1):
         match_idxs = []
         for i in range(len(self.gt_a_list)):
             if label == self.gt_a_list[i]:
                 match_idxs.append(i)
-        return self.videos[random.choice(match_idxs)]
+        
+        if idx != -1:
+            return self.videos[match_idxs[idx]], match_idxs[idx]
+        random_idx = np.random.choice(match_idxs)
+        return self.videos[random_idx], random_idx
+
+    def get_num_videos_for_class(self, label):
+        return len([gt for gt in self.gt_a_list if gt == label])
 
     def get_unique_classes(self):
         return list(set(self.gt_a_list))
@@ -242,11 +249,10 @@ class VideoDataset(torch.utils.data.Dataset):
                 return i
     
     
-    def get_seq(self, label):
+    def get_seq(self, label, idx=-1):
         c = self.get_train_or_test_db()
-        paths = c.get_rand_vid(label) 
+        paths, vid_id = c.get_rand_vid(label, idx) 
         n_frames = len(paths)
-
         if self.train:
             excess_frames = n_frames - self.seq_len
             excess_pad = int(min(5, excess_frames / 2))
@@ -281,7 +287,7 @@ class VideoDataset(torch.utils.data.Dataset):
             
             imgs = [self.tensor_transform(v) for v in transform(imgs)]
             imgs = torch.stack(imgs)
-        return imgs
+        return imgs, vid_id
 
     def get_single_img(self, index):
         c = self.get_train_or_test_db().cursor()
@@ -308,7 +314,14 @@ class VideoDataset(torch.utils.data.Dataset):
         c = self.get_train_or_test_db()
         classes = c.get_unique_classes()
         batch_classes = random.sample(classes, self.way)
-        
+
+
+        if self.train:
+            n_queries = self.args.query_per_class
+        else:
+            n_queries = self.args.query_per_class_test
+
+
         support_set = []
         support_labels = []
         target_set = []
@@ -317,11 +330,16 @@ class VideoDataset(torch.utils.data.Dataset):
         real_target_labels = []
 
         for bl, bc in enumerate(batch_classes):
-            for i in range(self.shot):
-                support_set.append(self.get_seq(bc))
+            n_total = c.get_num_videos_for_class(bc)
+            idxs = random.sample([i for i in range(n_total)], self.args.shot + n_queries)
+
+            for idx in idxs[0:self.args.shot]:
+                vid, vid_id = self.get_seq(bc, idx)
+                support_set.append(vid)
                 support_labels.append(bl)
-            for i in range(self.query_per_class):
-                target_set.append(self.get_seq(bc))
+            for idx in idxs[self.args.shot:]:
+                vid, vid_id = self.get_seq(bc, idx)
+                target_set.append(vid)
                 target_labels.append(bl)
                 real_target_labels.append(bc)
         
