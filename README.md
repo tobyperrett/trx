@@ -25,11 +25,24 @@ It includes the training and testing process, data loader, logging and so on. It
 Download your chosen dataset, and extract frames to be of the form dataset/class/video/frame-number.jpg (8 digits, zero-padded).
 To prepare your data, zip the dataset folder with no compression. We did this as our filesystem has a large block size and limited number of individual files, which means one large zip file has to be stored in RAM. If you don't have this limitation (hopefully you won't because it's annoying) then you may prefer to use a different data loading process.
 
-Put your desired splits (we used https://github.com/ffmpbgrnn/CMN for Kinetics and SSv2) in text files. These should be called trainlistXX.txt and testlistXX.txt. XX is a 0-padded number, e.g. 01. You can have separate text files for evaluating on the validation set, e.g. trainlist01.txt/testlist01.txt to train on the train set and evaluate on the the test set, and trainlist02.txt/testlist02.txt to train on the train set and evaluate on the validation set. The number is passed as a command line argument.
+Put your desired splits in text files (see below for a description of splits). These should be called trainlistXX.txt and testlistXX.txt. XX is a 0-padded number, e.g. 01. You can have separate text files for evaluating on the validation set, e.g. trainlist01.txt/testlist01.txt to train on the train set and evaluate on the the test set, and trainlist02.txt/testlist02.txt to train on the train set and evaluate on the validation set. The number is passed as a command line argument.
 
 Modify the distribute function in model.py. We have 4 x 11GB GPUs, so we split the ResNets over the 4 GPUs and leave the cross-transformer part on GPU 0. The ResNets are always split evenly across all GPUs specified, so you might have to split the cross-transformer part, or have the cross-transformer part on its own GPU.
 
 Modify the command line parser in run.py so it has the correct paths and filenames for the dataset zip and split text files.
+
+
+## Splits
+We used https://github.com/ffmpbgrnn/CMN for Kinetics and SSv2.  We also used the split from OTAM (Cao et. al CVPR 2020) for SSv2, and splits from ARN (Zhang et. al ECCV 2020) for HMDB and UCF.  These are all the in the splits folder.
+
+
+## Citation
+If you use this code/method or find it helpful, please cite:
+
+	@inproceedings{perrett2021trx,
+	title = {Temporal Relational CrossTransformers for Few-Shot Action Recognition}
+	booktitle = {Computer Vision and Pattern Recognition}
+	year = {2021}}
 
 
 ## Acknowledgements
