@@ -33,7 +33,7 @@ Modify the command line parser in run.py so it has the correct paths and filenam
 
 
 ## Splits
-We used https://github.com/ffmpbgrnn/CMN for Kinetics and SSv2.  We also used the split from OTAM (Cao et. al CVPR 2020) for SSv2, and splits from ARN (Zhang et. al ECCV 2020) for HMDB and UCF.  These are all the in the splits folder.
+We used https://github.com/ffmpbgrnn/CMN for Kinetics and SSv2.  We also used the split from OTAM (Cao et al. CVPR 2020) for SSv2, and splits from ARN (Zhang et al. ECCV 2020) for HMDB and UCF.  These are all the in the splits folder.
 
 
 ## Citation
