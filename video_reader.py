@@ -13,7 +13,7 @@ from glob import glob
 from videotransforms.video_transforms import Compose, Resize, RandomCrop, RandomRotation, ColorJitter, RandomHorizontalFlip, CenterCrop, TenCrop
 from videotransforms.volume_transforms import ClipToTensor
 
-
+"""Contains video frame paths and ground truth labels for a single split (e.g. train videos). """
 class Split():
     def __init__(self):
         self.gt_a_list = []
@@ -46,12 +46,12 @@ class Split():
             l = len(v)
             if l > max_len:
                 max_len = l
-
         return max_len
 
     def __len__(self):
         return len(self.gt_a_list)
 
+"""Dataset for few-shot videos, which returns few-shot tasks. """
 class VideoDataset(torch.utils.data.Dataset):
     def __init__(self, args):
         self.args = args
@@ -65,8 +65,6 @@ class VideoDataset(torch.utils.data.Dataset):
 
         self.annotation_path = args.traintestlist
 
-        self.single_img = False
-
         self.way=args.way
         self.shot=args.shot
         self.query_per_class=args.query_per_class
@@ -75,47 +73,36 @@ class VideoDataset(torch.utils.data.Dataset):
         self.test_split = Split()
 
         self.setup_transforms()
-
         self._select_fold()
-        
         self.read_dir()
 
-
+    """Setup crop sizes/flips for augmentation during training and centre crop for testing"""
     def setup_transforms(self):
-        if self.single_img:
-            self.transform = {}
-            trsfm = transforms.Compose([
-                        transforms.Resize((84,84)),
-                        transforms.ToTensor(),
-                    ])
-            self.transform['train'] = trsfm
-            self.transform['test'] = trsfm
-
+        video_transform_list = []
+        video_test_list = []
+            
+        if self.img_size == 84:
+            video_transform_list.append(Resize(96))
+            video_test_list.append(Resize(96))
+        elif self.img_size == 224:
+            video_transform_list.append(Resize(256))
+            video_test_list.append(Resize(256))
         else:
-            video_transform_list = []
-            video_test_list = []
-            
-            if self.img_size == 84:
-                video_transform_list.append(Resize(96))
-                video_test_list.append(Resize(96))
-            elif self.img_size == 224:
-                video_transform_list.append(Resize(256))
-                video_test_list.append(Resize(256))
-            
-            
-            video_transform_list.append(RandomHorizontalFlip())
-            video_transform_list.append(RandomCrop(self.img_size))
-            
+            print("img size transforms not setup")
+            exit(1)
+        video_transform_list.append(RandomHorizontalFlip())
+        video_transform_list.append(RandomCrop(self.img_size))
 
+        video_test_list.append(CenterCrop(self.img_size))
 
-            video_test_list.append(CenterCrop(self.img_size))
-
-            self.transform = {}
-            self.transform["train"] = Compose(video_transform_list)
-            self.transform["test"] = Compose(video_test_list)
-            #
-
+        self.transform = {}
+        self.transform["train"] = Compose(video_transform_list)
+        self.transform["test"] = Compose(video_test_list)
+    
+    """Loads all videos into RAM from an uncompressed zip. Necessary as the filesystem has a large block size, which is unsuitable for lots of images. """
+    """Contains some legacy code for loading images directly, but this has not been used/tested for a while so might not work with the current codebase. """
     def read_dir(self):
+        # load zipfile into memory
         if self.data_dir.endswith('.zip'):
             self.zip = True
             zip_fn = os.path.join(self.data_dir)
@@ -124,6 +111,7 @@ class VideoDataset(torch.utils.data.Dataset):
         else:
             self.zip = False
 
+        # go through zip and populate splits with frame locations and action groundtruths
         if self.zip:
             dir_list = list(set([x for x in self.zfile.namelist() if '.jpg' not in x]))
 
@@ -133,7 +121,6 @@ class VideoDataset(torch.utils.data.Dataset):
             video_folders = list(set([x.split(os.sep)[-2] for x in dir_list if len(x.split(os.sep)) > 3]))
             video_folders.sort()
             self.video_folders = video_folders
-
 
             class_folders_indexes = {v: k for k, v in enumerate(self.class_folders)}
             video_folders_indexes = {v: k for k, v in enumerate(self.video_folders)}
@@ -192,6 +179,7 @@ class VideoDataset(torch.utils.data.Dataset):
         print("loaded {}".format(self.data_dir))
         print("train: {}, test: {}".format(len(self.train_split), len(self.test_split)))
 
+    """ return the current split being used """
     def get_train_or_test_db(self, split=None):
         if split is None:
             get_train_split = self.train
@@ -206,7 +194,8 @@ class VideoDataset(torch.utils.data.Dataset):
             return self.train_split
         else:
             return self.test_split
-   
+    
+    """ load the paths of all videos in the train and test splits. """ 
     def _select_fold(self):
         lists = {}
         for name in ["train", "test"]:
@@ -226,17 +215,20 @@ class VideoDataset(torch.utils.data.Dataset):
             lists[name] = selected_files
         self.train_test_lists = lists
 
+    """ Set len to large number as we use lots of random tasks. Stopping point controlled in run.py. """
     def __len__(self):
         c = self.get_train_or_test_db()
         return 1000000
         return len(c)
    
+    """ Get the classes used for the current split """
     def get_split_class_list(self):
         c = self.get_train_or_test_db()
         classes = list(set(c.gt_a_list))
         classes.sort()
         return classes
     
+    """Loads a single image from a specified path """
     def read_single_image(self, path):
         if self.zip:
             with self.zfile.open(path, 'r') as f:
@@ -248,35 +240,38 @@ class VideoDataset(torch.utils.data.Dataset):
                 i.load()
                 return i
     
-    
+    """Gets a single video sequence. Handles sampling if there are more frames than specified. """
     def get_seq(self, label, idx=-1):
         c = self.get_train_or_test_db()
         paths, vid_id = c.get_rand_vid(label, idx) 
         n_frames = len(paths)
-        if self.train:
-            excess_frames = n_frames - self.seq_len
-            excess_pad = int(min(5, excess_frames / 2))
-            if excess_pad < 1:
-                start = 0
-                end = n_frames - 1
+        if n_frames == self.args.seq_len:
+            idxs = [int(f) for f in range(n_frames)]
+        else:
+            if self.train:
+                excess_frames = n_frames - self.seq_len
+                excess_pad = int(min(5, excess_frames / 2))
+                if excess_pad < 1:
+                    start = 0
+                    end = n_frames - 1
+                else:
+                    start = random.randint(0, excess_pad)
+                    end = random.randint(n_frames-1 -excess_pad, n_frames-1)
             else:
-                start = random.randint(0, excess_pad)
-                end = random.randint(n_frames-1 -excess_pad, n_frames-1)
-        else:
-            start = 1
-            end = n_frames - 2
-
-        if end - start < self.seq_len:
-            end = n_frames - 1
-            start = 0
-        else:
-            pass
-
-        idx_f = np.linspace(start, end, num=self.seq_len)
-        idxs = [int(f) for f in idx_f]
-        
-        if self.seq_len == 1:
-            idxs = [random.randint(start, end-1)]
+                start = 1
+                end = n_frames - 2
+    
+            if end - start < self.seq_len:
+                end = n_frames - 1
+                start = 0
+            else:
+                pass
+    
+            idx_f = np.linspace(start, end, num=self.seq_len)
+            idxs = [int(f) for f in idx_f]
+            
+            if self.seq_len == 1:
+                idxs = [random.randint(start, end-1)]
 
         imgs = [self.read_single_image(paths[i]) for i in idxs]
         if (self.transform is not None):
@@ -289,38 +284,19 @@ class VideoDataset(torch.utils.data.Dataset):
             imgs = torch.stack(imgs)
         return imgs, vid_id
 
-    def get_single_img(self, index):
-        c = self.get_train_or_test_db().cursor()
-        try:
-            path, label = c.execute("SELECT path, gt_a FROM frames WHERE id=?", (int(index+1), )).fetchall()[0]
-            img = self.read_single_image(path)
-        except:
-            print(index)
-            exit(1)
-        if (self.transform is not None):
-            if self.train:
-                transform = self.transform["train"]
-            else:
-                transform = self.transform["test"]
-            img = transform(img)
-            return img, label
 
     """returns dict of support and target images and labels"""
     def __getitem__(self, index):
 
-        if self.single_img:
-            return self.get_single_img(index)
-
+        #select classes to use for this task
         c = self.get_train_or_test_db()
         classes = c.get_unique_classes()
         batch_classes = random.sample(classes, self.way)
-
 
         if self.train:
             n_queries = self.args.query_per_class
         else:
             n_queries = self.args.query_per_class_test
-
 
         support_set = []
         support_labels = []
@@ -330,6 +306,8 @@ class VideoDataset(torch.utils.data.Dataset):
         real_target_labels = []
 
         for bl, bc in enumerate(batch_classes):
+            
+            #select shots from the chosen classes
             n_total = c.get_num_videos_for_class(bc)
             idxs = random.sample([i for i in range(n_total)], self.args.shot + n_queries)
 
@@ -350,7 +328,6 @@ class VideoDataset(torch.utils.data.Dataset):
         t = list(zip(target_set, target_labels, real_target_labels))
         random.shuffle(t)
         target_set, target_labels, real_target_labels = zip(*t)
-        
         
         support_set = torch.cat(support_set)
         target_set = torch.cat(target_set)

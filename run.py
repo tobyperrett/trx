@@ -14,10 +14,6 @@ import torchvision
 import video_reader
 import random 
 
-NUM_TEST_TASKS = 10000
-PRINT_FREQUENCY = 1000
-
-TEST_ITERS = [10000]
 
 def main():
     learner = Learner()
@@ -36,11 +32,9 @@ class Learner:
 
         self.writer = SummaryWriter()
         
-        #gpu_device = 'cuda:0'
         gpu_device = 'cuda'
         self.device = torch.device(gpu_device if torch.cuda.is_available() else 'cpu')
         self.model = self.init_model()
-        self.train_set, self.validation_set, self.test_set = self.init_data()
         
         self.vd = video_reader.VideoDataset(self.args)
         self.video_loader = torch.utils.data.DataLoader(self.vd, batch_size=1, num_workers=self.args.num_workers)
@@ -52,7 +46,7 @@ class Learner:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
         elif self.args.opt == "sgd":
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.args.learning_rate)
-        self.test_accuracies = TestAccuracies(self.test_set)
+        self.test_accuracies = TestAccuracies(self.args.dataset)
         
         self.scheduler = MultiStepLR(self.optimizer, milestones=self.args.sch, gamma=0.1)
         
@@ -68,12 +62,6 @@ class Learner:
             model.distribute_model()
         return model
 
-    def init_data(self):
-        train_set = [self.args.dataset]
-        validation_set = [self.args.dataset]
-        test_set = [self.args.dataset]
-
-        return train_set, validation_set, test_set
 
     """
     Command line parser
@@ -81,24 +69,20 @@ class Learner:
     def parse_command_line(self):
         parser = argparse.ArgumentParser()
 
-        parser.add_argument("--dataset", choices=["ssv2", "kinetics", "hmdb", "ucf"], default="ssv2",
-                            help="Dataset to use.")
+        parser.add_argument("--dataset", choices=["ssv2", "kinetics", "hmdb", "ucf"], default="ssv2", help="Dataset to use.")
         parser.add_argument("--learning_rate", "-lr", type=float, default=0.001, help="Learning rate.")
-        parser.add_argument("--tasks_per_batch", type=int, default=16,
-                            help="Number of tasks between parameter optimizations.")
+        parser.add_argument("--tasks_per_batch", type=int, default=16, help="Number of tasks between parameter optimizations.")
         parser.add_argument("--checkpoint_dir", "-c", default=None, help="Directory to save checkpoint to.")
         parser.add_argument("--test_model_path", "-m", default=None, help="Path to model to load and test.")
-        parser.add_argument("--training_iterations", "-i", type=int, default=50020,
-                            help="Number of meta-training iterations.")
-        parser.add_argument("--resume_from_checkpoint", "-r", dest="resume_from_checkpoint", default=False,
-                            action="store_true", help="Restart from latest checkpoint.")
-        parser.add_argument("--way", type=int, default=5, help="Way of single dataset task.")
-        parser.add_argument("--shot", type=int, default=5, help="Shots per class for context of single dataset task.")
-        parser.add_argument("--query_per_class", type=int, default=5,
-                            help="Target samples (i.e. queries) per class used for training.")
-        parser.add_argument("--query_per_class_test", type=int, default=1,
-                            help="Target samples (i.e. queries) per class used for testing.")
-
+        parser.add_argument("--training_iterations", "-i", type=int, default=100020, help="Number of meta-training iterations.")
+        parser.add_argument("--resume_from_checkpoint", "-r", dest="resume_from_checkpoint", default=False, action="store_true", help="Restart from latest checkpoint.")
+        parser.add_argument("--way", type=int, default=5, help="Way of each task.")
+        parser.add_argument("--shot", type=int, default=5, help="Shots per class.")
+        parser.add_argument("--query_per_class", type=int, default=5, help="Target samples (i.e. queries) per class used for training.")
+        parser.add_argument("--query_per_class_test", type=int, default=1, help="Target samples (i.e. queries) per class used for testing.")
+        parser.add_argument('--test_iters', nargs='+', type=int, help='iterations to test at. Default is for ssv2 otam split.', default=[75000])
+        parser.add_argument("--num_test_tasks", type=int, default=10000, help="number of random tasks to test on.")
+        parser.add_argument("--print_freq", type=int, default=1000, help="print and log every n iterations.")
         parser.add_argument("--seq_len", type=int, default=8, help="Frames per video.")
         parser.add_argument("--num_workers", type=int, default=10, help="Num dataloader workers.")
         parser.add_argument("--method", choices=["resnet18", "resnet34", "resnet50"], default="resnet50", help="method")
@@ -108,14 +92,11 @@ class Learner:
         parser.add_argument("--save_freq", type=int, default=5000, help="Number of iterations between checkpoint saves.")
         parser.add_argument("--img_size", type=int, default=224, help="Input image size to the CNN after cropping.")
         parser.add_argument('--temp_set', nargs='+', type=int, help='cardinalities e.g. 2,3 is pairs and triples', default=[2,3])
-
-        parser.add_argument("--scratch", choices=["bc", "bp"], default="bp", help="Computer to run on")
+        parser.add_argument("--scratch", choices=["bc", "bp"], default="bp", help="directory containing dataset, splits, and checkpoint saves.")
         parser.add_argument("--num_gpus", type=int, default=1, help="Number of GPUs to split the ResNet over")
         parser.add_argument("--debug_loader", default=False, action="store_true", help="Load 1 vid per class for debugging")
-       
-        parser.add_argument("--split", type=int, default=3, help="Dataset split.")
+        parser.add_argument("--split", type=int, default=7, help="Dataset split.")
         parser.add_argument('--sch', nargs='+', type=int, help='iters to drop learning rate', default=[1000000])
-        
 
         args = parser.parse_args()
         
@@ -123,7 +104,8 @@ class Learner:
             args.scratch = "/mnt/storage/home/tp8961/scratch"
         elif args.scratch == "bp":
             args.num_gpus = 4
-            args.num_workers = 5
+            # this is low becuase of RAM constraints for the data loader
+            args.num_workers = 3
             args.scratch = "/work/tp8961"
         
         if args.checkpoint_dir == None:
@@ -139,7 +121,7 @@ class Learner:
         
         if args.dataset == "ssv2":
             args.traintestlist = os.path.join(args.scratch, "video_datasets/splits/somethingsomethingv2TrainTestlist")
-            args.path = os.path.join(args.scratch, "video_datasets/data/somethingsomethingv2_256x256q5_1.zip")
+            args.path = os.path.join(args.scratch, "video_datasets/data/somethingsomethingv2_256x256q5_7l8.zip")
         elif args.dataset == "kinetics":
             args.traintestlist = os.path.join(args.scratch, "video_datasets/splits/kineticsTrainTestlist")
             args.path = os.path.join(args.scratch, "video_datasets/data/kinetics_256q5_1.zip")
@@ -149,6 +131,7 @@ class Learner:
         elif args.dataset == "hmdb":
             args.traintestlist = os.path.join(args.scratch, "video_datasets/splits/hmdb51TrainTestlist")
             args.path = os.path.join(args.scratch, "video_datasets/data/hmdb51_256q5.zip")
+
         return args
 
     def run(self):
@@ -175,7 +158,7 @@ class Learner:
                         self.optimizer.step()
                         self.optimizer.zero_grad()
                     self.scheduler.step()
-                    if (iteration + 1) % PRINT_FREQUENCY == 0:
+                    if (iteration + 1) % self.args.print_freq == 0:
                         # print training stats
                         print_and_log(self.logfile,'Task [{}/{}], Train Loss: {:.7f}, Train Accuracy: {:.7f}'
                                       .format(iteration + 1, total_iterations, torch.Tensor(losses).mean().item(),
@@ -187,7 +170,7 @@ class Learner:
                         self.save_checkpoint(iteration + 1)
 
 
-                    if ((iteration + 1) in TEST_ITERS) and (iteration + 1) != total_iterations:
+                    if ((iteration + 1) in self.args.test_iters) and (iteration + 1) != total_iterations:
                         accuracy_dict = self.test(session)
                         self.test_accuracies.print(self.logfile, accuracy_dict)
 
@@ -219,7 +202,7 @@ class Learner:
                 iteration = 0
                 item = self.args.dataset
                 for task_dict in self.video_loader:
-                    if iteration >= NUM_TEST_TASKS:
+                    if iteration >= self.args.num_test_tasks:
                         break
                     iteration += 1
 
