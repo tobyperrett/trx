@@ -7,6 +7,10 @@ This repo contains code for the method introduced in the paper:
 
 We provide two ways to use this method. The first is to incorporate it into your own few-shot video framework to allow direct comparisons against your method using the same codebase. This is recommended, as everyone has different systems, data storage etc. The second is a full train/test framework, which you will need to modify to suit your system.
 
+For a quick demo of how the model works with some dummy data, just run:
+
+	python model.py
+
 
 ## Use within your own few-shot framework (recommended)
 
