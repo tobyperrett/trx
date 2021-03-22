@@ -35,7 +35,8 @@ class Learner:
         gpu_device = 'cuda'
         self.device = torch.device(gpu_device if torch.cuda.is_available() else 'cpu')
         self.model = self.init_model()
-        
+        self.train_set, self.validation_set, self.test_set = self.init_data()
+
         self.vd = video_reader.VideoDataset(self.args)
         self.video_loader = torch.utils.data.DataLoader(self.vd, batch_size=1, num_workers=self.args.num_workers)
         
@@ -46,7 +47,7 @@ class Learner:
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
         elif self.args.opt == "sgd":
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.args.learning_rate)
-        self.test_accuracies = TestAccuracies(self.args.dataset)
+        self.test_accuracies = TestAccuracies(self.test_set)
         
         self.scheduler = MultiStepLR(self.optimizer, milestones=self.args.sch, gamma=0.1)
         
@@ -61,6 +62,12 @@ class Learner:
         if self.args.num_gpus > 1:
             model.distribute_model()
         return model
+
+    def init_data(self):
+        train_set = [self.args.dataset]
+        validation_set = [self.args.dataset]
+        test_set = [self.args.dataset]
+        return train_set, validation_set, test_set
 
 
     """
@@ -172,6 +179,7 @@ class Learner:
 
                     if ((iteration + 1) in self.args.test_iters) and (iteration + 1) != total_iterations:
                         accuracy_dict = self.test(session)
+                        print(accuracy_dict)
                         self.test_accuracies.print(self.logfile, accuracy_dict)
 
                 # save the final model
