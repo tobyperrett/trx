@@ -35,6 +35,12 @@ Modify the distribute function in model.py. We have 4 x 11GB GPUs, so we split t
 
 Modify the command line parser in run.py so it has the correct paths and filenames for the dataset zip and split text files.
 
+To run the SSv2 OTAM split for example (see paper for other hyperparams), you can then do:
+
+	python run.py -c checkpoint_dir --query_per_class 5 --shot 5 --way 5 --trans_linear_out_dim 1152 --tasks_per_batch 16 --test_iters 75000 --dataset ssv2 --split 7 -lr 0.001 --method resnet50 --img_size 224
+
+Most of these are the default args.
+
 
 ## Splits
 We used https://github.com/ffmpbgrnn/CMN for Kinetics and SSv2.  We also used the split from OTAM (Cao et al. CVPR 2020) for SSv2, and splits from ARN (Zhang et al. ECCV 2020) for HMDB and UCF.  These are all the in the splits folder.
