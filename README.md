@@ -3,7 +3,7 @@
 
 This repo contains code for the method introduced in the paper:
 
-[Temporal-Relational CrossTransformers for Few-Shot Action Recognition](https://arxiv.org/)
+[Temporal-Relational CrossTransformers for Few-Shot Action Recognition](https://arxiv.org/abs/2101.06184)
 
 We provide two ways to use this method. The first is to incorporate it into your own few-shot video framework to allow direct comparisons against your method using the same codebase. This is recommended, as everyone has different systems, data storage etc. The second is a full train/test framework, which you will need to modify to suit your system.
 
